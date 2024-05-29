@@ -1,0 +1,12 @@
+main {
+    int a;
+    int b;
+    int c;
+    int max;
+
+    scan(a); scan(b); scan(c);
+    if (a>b) then {max = a;} else {max = b;} end
+    if (c>max) then {max = c;} end
+
+    print(max);
+}
