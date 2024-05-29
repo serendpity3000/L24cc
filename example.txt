@@ -1,0 +1,9 @@
+main{
+int b = 100;
+for (int a=0;a<10;a++){
+    if (a==5) then {print(b--);} end
+}
+print(b);
+}
+
+
