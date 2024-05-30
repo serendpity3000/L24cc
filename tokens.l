@@ -21,6 +21,7 @@
 "end"                           return TOKEN(TEND);    
 "while"                         return TOKEN(TWHILE);
 "for"                           return TOKEN(TFOR);
+"scan"                          return TOKEN(TSCAN);
 [a-zA-Z_][a-zA-Z0-9_]*  SAVE_TOKEN; return TIDENTIFIER;
 [0-9]+\.[0-9]* 			    SAVE_TOKEN; return TDOUBLE;
 [0-9]+					        SAVE_TOKEN; return TINTEGER;
@@ -48,6 +49,9 @@
 "-"		          				return TOKEN(TMINUS);
 "*"		          				return TOKEN(TMUL);
 "/"				          		return TOKEN(TDIV);
+
+"||"                            return TOKEN(TOR);
+"&&"                            return TOKEN(TAND);
 
 .                       printf("Unknown token!\n"); yyterminate();
 

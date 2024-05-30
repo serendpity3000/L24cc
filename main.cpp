@@ -27,6 +27,9 @@ int main(int argc, char **argv)
 	}
 	yyparse();
 	cout << programBlock << endl;
+	if (argc > 2) {
+		freopen(argv[2], "r", stdin);
+    }
     // see http://comments.gmane.org/gmane.comp.compilers.llvm.devel/33877
 	InitializeNativeTarget();
 	InitializeNativeTargetAsmPrinter();
@@ -34,14 +37,11 @@ int main(int argc, char **argv)
 	CodeGenContext context;
 	createCoreFunctions(context);
 	context.generateCode(*programBlock);
-	if (argc > 2) {
-        freopen(argv[2], "r", stdin);
-		fclose(stdin);
-    }
-	//std::error_code EC;
-    //llvm::raw_fd_ostream outFile("example.ll", EC, llvm::sys::fs::OF_None);
+	
+	std::error_code EC;
+    llvm::raw_fd_ostream outFile("example.ll", EC, llvm::sys::fs::OF_None);
     //context.module->print(outFile, nullptr);
-    //outFile.close();
+    outFile.close();
 	context.runCode();
 	
 	return 0;

@@ -184,3 +184,11 @@ public:
 
     virtual llvm::Value* codeGen(CodeGenContext& context);
 };
+
+class NScanStatement : public NStatement {
+public:
+    std::vector<NIdentifier*> identifiers;
+    NScanStatement(std::vector<NIdentifier*>& identifiers) : identifiers(identifiers) {}
+    virtual llvm::Value* codeGen(CodeGenContext& context);
+};
+

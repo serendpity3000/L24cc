@@ -186,8 +186,10 @@ Value* NUnaryOperator::codeGen(CodeGenContext& context) {
 Value* NBinaryOperator::codeGen(CodeGenContext& context)
 {
     std::cout << "Creating binary operation " << "  " << op << endl;
+    llvm::IRBuilder<> builder(context.currentBlock());
     Instruction::BinaryOps instr;
     CmpInst::Predicate pred;
+    PHINode *phiNode;
 	Value* result;
 
     switch (op) {
@@ -202,8 +204,11 @@ Value* NBinaryOperator::codeGen(CodeGenContext& context)
         case TCLE:   pred = CmpInst::ICMP_SLE; goto compare;
         case TCGT:   pred = CmpInst::ICMP_SGT; goto compare;
         case TCGE:   pred = CmpInst::ICMP_SGE; goto compare;
+
+        case TAND: goto logical_and;
+        case TOR: goto logical_or;
     }
-    return NULL;
+    return nullptr;
 
 math:
     return BinaryOperator::Create(instr, lhs.codeGen(context), 
@@ -211,9 +216,67 @@ math:
 
 compare:
     result = CmpInst::Create(Instruction::ICmp, pred, lhs.codeGen(context), rhs.codeGen(context), "", context.currentBlock());
-    result = CastInst::CreateZExtOrBitCast(result, llvm::Type::getInt1Ty(MyContext), "", context.currentBlock());
-    
     return result;
+
+logical_and: {
+    BasicBlock *lhsBlock = context.currentBlock();
+    BasicBlock *rhsBlock = BasicBlock::Create(MyContext, "rhs", lhsBlock->getParent());
+    BasicBlock *mergeBlock = BasicBlock::Create(MyContext, "merge", lhsBlock->getParent());
+
+    Value *lhsValue = lhs.codeGen(context);
+    if (!lhsValue->getType()->isIntegerTy(1)) {
+        lhsValue = builder.CreateICmpNE(lhsValue, ConstantInt::get(lhsValue->getType(), 0), "tmp");
+    }
+    builder.CreateCondBr(lhsValue, rhsBlock, mergeBlock);
+
+    context.pushBlock(rhsBlock);
+    Value *rhsValue = rhs.codeGen(context);
+    if (!rhsValue->getType()->isIntegerTy(1)) {
+        rhsValue = builder.CreateICmpNE(rhsValue, ConstantInt::get(rhsValue->getType(), 0), "tmp");
+    }
+    builder.SetInsertPoint(rhsBlock);
+    builder.CreateBr(mergeBlock);
+
+    context.popBlock();
+    context.pushBlock(mergeBlock);
+    builder.SetInsertPoint(mergeBlock);
+
+    phiNode = builder.CreatePHI(Type::getInt1Ty(MyContext), 2);
+    phiNode->addIncoming(builder.getInt1(false), lhsBlock);
+    phiNode->addIncoming(rhsValue, rhsBlock);
+
+    return phiNode;
+}
+
+logical_or: {
+    BasicBlock *lhsBlock = context.currentBlock();
+    BasicBlock *rhsBlock = BasicBlock::Create(MyContext, "rhs", lhsBlock->getParent());
+    BasicBlock *mergeBlock = BasicBlock::Create(MyContext, "merge", lhsBlock->getParent());
+
+    Value *lhsValue = lhs.codeGen(context);
+    if (!lhsValue->getType()->isIntegerTy(1)) {
+        lhsValue = builder.CreateICmpNE(lhsValue, ConstantInt::get(lhsValue->getType(), 0), "tmp");
+    }
+    builder.CreateCondBr(lhsValue, mergeBlock, rhsBlock);
+
+    context.pushBlock(rhsBlock);
+    Value *rhsValue = rhs.codeGen(context);
+    if (!rhsValue->getType()->isIntegerTy(1)) {
+        rhsValue = builder.CreateICmpNE(rhsValue, ConstantInt::get(rhsValue->getType(), 0), "tmp");
+    }
+    builder.SetInsertPoint(rhsBlock);
+    builder.CreateBr(mergeBlock);
+
+    context.popBlock();
+    context.pushBlock(mergeBlock);
+    builder.SetInsertPoint(mergeBlock);
+
+    phiNode = builder.CreatePHI(Type::getInt1Ty(MyContext), 2);
+    phiNode->addIncoming(builder.getInt1(true), lhsBlock);
+    phiNode->addIncoming(rhsValue, rhsBlock);
+
+    return phiNode;
+}
 }
 
 
@@ -537,7 +600,7 @@ Value* NWhileStatement::codeGen(CodeGenContext& context) {
 }
 
 
-llvm::Value* NForStatement::codeGen(CodeGenContext& context) {
+Value* NForStatement::codeGen(CodeGenContext& context) {
     llvm::Function* function = context.currentBlock()->getParent();
 
     // 创建基本块
@@ -581,6 +644,36 @@ llvm::Value* NForStatement::codeGen(CodeGenContext& context) {
     // 生成结束块
     function->getBasicBlockList().push_back(afterBB);
     context.pushBlock(afterBB);
+
+    return nullptr;
+}
+
+Value* NScanStatement::codeGen(CodeGenContext& context) {
+    llvm::IRBuilder<> builder(context.currentBlock());
+
+    // Declare scanf function if not already declared
+    if (!context.scanfFn) {
+        llvm::FunctionType* scanfType = llvm::FunctionType::get(
+            llvm::Type::getInt32Ty(MyContext), 
+            llvm::PointerType::get(llvm::Type::getInt8Ty(MyContext), 0), 
+            true
+        );
+        context.scanfFn = llvm::Function::Create(scanfType, llvm::Function::ExternalLinkage, "scanf", context.module);
+    }
+
+    // Generate the format string for scanf
+    llvm::Value* formatStr = builder.CreateGlobalStringPtr("%d");
+
+    for (auto ident : identifiers) {
+        if (context.locals().find(ident->name) == context.locals().end()) {
+            std::cerr << "undeclared variable " << ident->name << std::endl;
+            return nullptr;
+        }
+
+        llvm::Value* variable = context.locals()[ident->name];
+        llvm::Value* ptr = builder.CreateBitCast(variable, llvm::Type::getInt32PtrTy(MyContext));
+        builder.CreateCall(context.scanfFn, { formatStr, ptr });
+    }
 
     return nullptr;
 }
