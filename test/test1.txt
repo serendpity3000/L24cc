@@ -11,5 +11,7 @@ main
 		b=c;
 	}
 	if (n == 1) then {print(1);} end;
+	if (n == 2) then {print(1);} end;
+	if (n >= 3) then {print(c);} end;
 
 }
